@@ -1,0 +1,352 @@
+esphome:
+  name: o-camperscreen
+  friendly_name: o-camperscreen
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+# NOTE - the secrets and such used are all REDACTED as are the MAC addresses, you need to figure these MAC addresses out.
+# If you start the ESPHome devices with a sample MAC like AA:BB:CC:DD:EE:FF , it will at least log the local MAC in the logging so you can find that and update it, then redeploy.
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "REDACTED"
+
+ota:
+  - platform: esphome
+    password: "REDACTED"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "O-Camperscreen Fallback Hotspot"
+    password: "REDACTED"
+
+captive_portal:
+
+# --------------------------------------------------
+# Web Server
+# --------------------------------------------------
+web_server:
+  port: 80
+  version: 3
+  include_internal: True
+  local: true
+  log: True
+  auth:
+    username: camper
+    password: REDACTED
+  sorting_groups:
+    - id: environment
+      name: "Environment"
+      sorting_weight: 10
+    - id: security
+      name: "Security"
+      sorting_weight: 20
+    - id: controls
+      name: "Controls"
+      sorting_weight: 30
+
+i2c:
+  sda: GPIO04
+  scl: GPIO05
+  scan: true
+  frequency: 100kHz
+
+spi:
+  clk_pin: GPIO06
+  mosi_pin: GPIO07
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_large
+    size: 24
+
+output:
+  - platform: ledc
+    pin: GPIO3
+    id: gpio_3_backlight_pwm
+
+light:
+  - platform: monochromatic
+    output: gpio_3_backlight_pwm
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: ALWAYS_ON
+
+# --------------------------------------------------
+# Monitor Comms This unit - monitor - is 98:REDACTED
+# --------------------------------------------------
+espnow:
+  channel: 1
+  peers:
+    - "78:REDACTED"   # MAC of the camper ESP32
+  on_receive: 
+    then:
+      - logger.log: "Message Recieved"
+
+packet_transport:
+  - platform: espnow
+    providers: 
+      - name: o-camper
+        encryption: "REDACTED"
+
+#--------------------------------------------
+# Variables
+#--------------------------------------------
+text_sensor:
+  - platform: template
+    name: "Status"
+    id: status
+    internal: False
+    web_server:
+      sorting_group_id: environment
+      sorting_weight: 8
+  - platform: template
+    name: "Mode"
+    id: mode
+    internal: False
+    web_server:
+      sorting_group_id: environment
+      sorting_weight: 9
+
+# --------------------------------------------------
+# Sensors
+# --------------------------------------------------
+sensor:
+  - platform: packet_transport
+    provider: o-camper
+    id: remote_camper_mode
+    remote_id: mode_template
+    name: "Camper Mode"
+    internal: True
+    on_value: 
+      then:
+        - lambda: |- 
+            if (x == 1) {
+              id(mode).state = "Occupied";
+            } else if (x == 2) {
+              id(mode).state = "Secured";
+            } else if (x == 3) {
+              id(mode).state = "Sleeping";
+            } else if (x == 4) {
+              id(mode).state = "Traveling";
+            }
+
+  - platform: packet_transport
+    provider: o-camper
+    id: remote_panel_temp
+    remote_id: panel_temp
+    name: "Panel Temp"
+    internal: False
+    web_server:
+      sorting_group_id: environment
+      sorting_weight: 10
+  - platform: packet_transport
+    provider: o-camper
+    id: remote_panel_humid
+    remote_id: panel_humid
+    name: "Panel Humidity"
+    internal: False
+    web_server:
+      sorting_group_id: environment
+      sorting_weight: 10
+  - platform: packet_transport
+    provider: o-camper
+    id: remote_area_light
+    remote_id: area_light_template
+    name: "Area Light"
+    internal: False
+    web_server:
+      sorting_group_id: controls
+      sorting_weight: 10
+
+# -----------------------------
+# GLOBALS FOR UI STATE
+# -----------------------------
+globals:
+  - id: current_page
+    type: int
+    initial_value: '0'
+
+  - id: fan_speed
+    type: int
+    initial_value: '1'
+
+  - id: light_level
+    type: int
+    initial_value: '50'
+
+  - id: last_touch_time
+    type: uint32_t
+    initial_value: '0'
+
+
+# -----------------------------
+# DISPLAY + PAGE RENDERING
+# -----------------------------
+display:
+  - platform: mipi_spi
+    model: GC9A01A
+    id: round_display
+    show_test_card: false
+    invert_colors: true
+
+    cs_pin: GPIO10
+    dc_pin: GPIO2
+    rotation: 0
+    color_order: BGR
+
+    dimensions:
+      width: 240
+      height: 240
+
+    update_interval: 0.25s
+
+    pages:
+      - id: page_home
+        lambda: |-
+          auto black = Color(0, 0, 0);
+          auto white = Color(255, 255, 255);
+          auto green = Color(0, 255, 0);
+          auto blue = Color(0, 0, 255);
+
+          it.fill(black);
+          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Inside");
+
+          char buf[32];
+          snprintf(buf, sizeof(buf), "Temp: %.1f", id(remote_panel_temp).state);
+          it.print(120, 110, id(font_large), green, TextAlign::CENTER, buf);
+
+          snprintf(buf, sizeof(buf), "Humidity: %.1f", id(remote_panel_humid).state);
+          it.print(120, 160, id(font_large), blue, TextAlign::CENTER, buf);
+
+          // Draw left arrow (◀)
+          it.line(40, 120, 20, 120, white);   // horizontal
+          it.line(30, 110, 20, 120, white);   // upper diagonal
+          it.line(30, 130, 20, 120, white);   // lower diagonal
+
+          // Draw right arrow (▶)
+          it.line(200, 120, 220, 120, white); // horizontal
+          it.line(210, 110, 220, 120, white); // upper diagonal
+          it.line(210, 130, 220, 120, white); // lower diagonal
+
+      - id: page_fan
+        lambda: |-
+          auto black = Color(0, 0, 0);
+          auto white = Color(255, 255, 255);
+          auto green = Color(0, 255, 0);
+
+          it.fill(black);
+          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Fan Speed");
+
+          char buf[32];
+          snprintf(buf, sizeof(buf), "Speed: %d", id(fan_speed));
+          it.print(120, 140, id(font_large), green, TextAlign::CENTER, buf);
+          
+          // Draw left arrow (◀)
+          it.line(40, 120, 20, 120, white);   // horizontal
+          it.line(30, 110, 20, 120, white);   // upper diagonal
+          it.line(30, 130, 20, 120, white);   // lower diagonal
+
+          // Draw right arrow (▶)
+          it.line(200, 120, 220, 120, white); // horizontal
+          it.line(210, 110, 220, 120, white); // upper diagonal
+          it.line(210, 130, 220, 120, white); // lower diagonal
+
+      - id: page_light
+        lambda: |-
+          auto black = Color(0, 0, 0);
+          auto white = Color(255, 255, 255);
+          auto blue = Color(0, 0, 255);
+
+          it.fill(black);
+          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Exterior Light");
+
+          char buf[32];
+          snprintf(buf, sizeof(buf), "Level: %d", id(light_level));
+          it.print(120, 140, id(font_large), blue, TextAlign::CENTER, buf);
+          
+          // Draw left arrow (◀)
+          it.line(40, 120, 20, 120, white);   // horizontal
+          it.line(30, 110, 20, 120, white);   // upper diagonal
+          it.line(30, 130, 20, 120, white);   // lower diagonal
+
+          // Draw right arrow (▶)
+          it.line(200, 120, 220, 120, white); // horizontal
+          it.line(210, 110, 220, 120, white); // upper diagonal
+          it.line(210, 130, 220, 120, white); // lower diagonal
+
+# -----------------------------
+# TOUCHSCREEN
+# -----------------------------
+touchscreen:
+  platform: cst816
+  id: my_touchscreen
+  interrupt_pin: GPIO00
+  reset_pin: GPIO01
+
+  on_touch:
+    then:
+      - lambda: |-
+          auto t = id(my_touchscreen)->get_touch();
+          if (!t.has_value()) {
+            ESP_LOGI("touch", "Touch has no value.");
+            return;
+          }
+
+          int x = t.value().x;
+          int y = t.value().y;
+          ESP_LOGI("touch", "Touch at (%d, %d)", x, y);
+
+          uint32_t now = millis();
+          if (now - id(last_touch_time) < 300) return;
+          id(last_touch_time) = now;
+
+          // LEFT REGION → previous page
+          if (x > 1 && x < 120 && y > 100 && y < 140) {
+            id(round_display).show_prev_page();
+            ESP_LOGI("touch", "Left");
+            return;
+          }
+
+          // RIGHT REGION → next page
+          if (x > 210 && x < 240 && y > 100 && y < 140) {
+            id(round_display).show_next_page();
+            ESP_LOGI("touch", "Right");
+            return;
+          }
+
+          // UP/DOWN for fan/light pages
+          if (id(round_display).get_active_page() == id(page_fan)) {
+            if (y < 65) {
+              id(fan_speed) = std::min(5, id(fan_speed) + 1);
+              ESP_LOGI("touch", "Fan Up");
+            } else if (y > 170) {
+              id(fan_speed) = std::max(0, id(fan_speed) - 1);
+              ESP_LOGI("touch", "Fan Down");
+            }
+          }
+
+          if (id(round_display).get_active_page() == id(page_light)) {
+            if (y < 65) {
+              id(light_level) = std::min(100, id(light_level) + 5);
+              ESP_LOGI("touch", "Light Up");
+            } else if (y > 170) {
+              id(light_level) = std::max(0, id(light_level) - 5);
+              ESP_LOGI("touch", "Light Down");
+            }
+          }
+
+  on_release:
+    then:
+      - logger.log: "Dev released."
