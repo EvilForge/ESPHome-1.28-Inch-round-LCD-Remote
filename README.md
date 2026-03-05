@@ -62,7 +62,7 @@ Earlier attempts using LVGL were unstable or overly complex for this use case. T
 - `ESP‑NOW` for communication  
 - ESPHome **display pages** for a clean UI structure  
 
-Some code was generated with the help of Copilot/ChatGPT, but required significant cleanup because LLMs tend to mix ESPHome and Arduino patterns. The final result is fully ESPHome‑native.
+Some code was generated with the help of Copilot/ChatGPT, but required significant cleanup because LLMs tend to mix ESPHome and Arduino patterns. The final result is fully ESPHome‑native. I gained a lot of insight from [Home Assistant Forum Topic](this Home Assistant Thread: https://community.home-assistant.io/t/1-28-inch-240-240-esp32c3-round-display-with-rotary-knob-uedx24240013-md50e-by-viewe-company/786687) 
 
 ---
 
