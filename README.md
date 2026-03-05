@@ -1,19 +1,93 @@
-# ESPHome-1.28-Inch-round-LCD-Remote
-Using ESPHome to build a remote control with a generic 1.28 inch round lcd display containing an ESP32-C3, GC9A01A driver and cst816 touchscreen.
+# ESPHome 1.28" Round LCD Remote
 
-I purchased a couple round 240x240 LCD displays that have:
-1. ESP32-C3 cpu
-2.  GC9A01A graphics driver
-3.  cst816 touchscreen driver
+A compact, instant‑on remote control built with **ESPHome**, using a generic **1.28‑inch round 240×240 LCD** featuring:
 
-Front:
-![Alt text](images/Product-Front-View.webp)   
+- **ESP32‑C3** MCU  
+- **GC9A01A** display driver  
+- **CST816** capacitive touchscreen  
 
-Rear:
-![Alt text](images/Product-rear-view.webp)   
+This project turns the device into a standalone, low‑power, always‑ready controller for a camper/RV environment using **ESP‑NOW** for communication—no Wi‑Fi or Home Assistant required.
 
-I've never been able to get the code working for them, until I tackled them this past week. I use Home Assistant and esphome for most of my devices now, so I stay on that platform. In looking at various esphome components, i found the older lgvl driver was working for some folks but i had issues.. I ended up staying with the mipi_spi component.  A lot of the code was home grown but I relied on Copilot and chatgpt some to help pull in some of the mundane details (with, of course, a lot of cleanup, as the LLM's available for free understand a lot of the ESPHome design, but often end up mixing in older Arduino code and breaking things...)
+---
 
-What i have in this version is a remote that has one way communication from the source system, screen controls and pages. It uses ESPNow as the communication component so Home Assistant is NOT needed, nor is a WiFi network. Since this application in particular is for a camper/rv I cannot rely on those items being present (i.e. when i'm on the road the home network isnt around!). When testing my camper I found its a bit more work than i want to turn on lights and fans from inside.. having to unlock the phone then launch the website, then log in, then change things.  This remote is simpler, direct access, and encrypted (perhaps weakly, but still sufficient) and instantly on.
+## Hardware Overview
 
-Note that there are companion projects for this.. I will upload those repos shortly. They include the actual camper monitor IoT device and an in-car monitor.
+### Front  
+![Front View](images/Product-Front-View.webp)
+
+### Rear  
+![Rear View](images/Product-rear-view.webp)
+
+These inexpensive round displays are widely available and include everything needed for a self‑contained remote: CPU, display, and touch controller.
+
+---
+
+## Project Goals
+
+The remote is designed for **fast, reliable control** inside a camper without depending on a phone, Wi‑Fi, or Home Assistant. Key goals include:
+
+- Instant‑on operation  
+- USB‑C power  
+- Simple page‑based UI with left/right navigation  
+- Touch‑based controls for fan and lighting  
+- Clear navigation arrows on screen  
+- ESP‑NOW communication (encrypted)  
+- Optional local web server for debugging  
+- Optional Home Assistant integration for monitoring  
+
+### Planned Pages
+
+1. **Environment Page**  
+   Displays interior temperature and humidity.  
+   *No controls on this page.*
+
+2. **Fan Control Page**  
+   Shows current fan speed.  
+   Up/down touch regions adjust speed.
+
+3. **Exterior Lighting Page**  
+   Shows current brightness.  
+   Up/down touch regions adjust brightness.
+
+---
+
+## Background and Development Notes
+
+I’ve owned these round LCD modules for a while but struggled to get them working reliably—mostly due to driver inconsistencies and outdated examples. With recent ESPHome updates, the **mipi_spi** display component now works well with the GC9A01A, and the CST816 touchscreen is supported.
+
+Earlier attempts using LVGL were unstable or overly complex for this use case. The current approach uses:
+
+- `mipi_spi` for the display  
+- `touchscreen` component for CST816  
+- `ESP‑NOW` for communication  
+- ESPHome **display pages** for a clean UI structure  
+
+Some code was generated with the help of Copilot/ChatGPT, but required significant cleanup because LLMs tend to mix ESPHome and Arduino patterns. The final result is fully ESPHome‑native.
+
+---
+
+## Current Status
+
+This version implements:
+
+- One‑way ESP‑NOW updates from the camper’s main controller  
+- Multi‑page UI with navigation arrows  
+- Touch‑based page switching  
+- Fan and light control logic  
+- Stable display rendering  
+- Optional web server for debugging  
+
+The remote works independently of Home Assistant or Wi‑Fi, which is essential for RV use where networks may not be available. It provides quick access to lighting and fan controls without needing to unlock a phone or load a web UI.
+
+---
+
+## Related Projects
+
+Companion repositories will be published soon, including:
+
+- The **main camper monitor** ESP32 device  
+- An **in‑vehicle monitor** for real‑time status while driving  
+
+These work together with this remote to form a complete monitoring and control system.
+
+---
