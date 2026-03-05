@@ -40,7 +40,7 @@ The remote is designed for **fast, reliable control** inside a camper without de
 1. **Environment Page**  
    Displays interior temperature and humidity.  
    *No controls on this page.*
-   ![Rear View](images/First Screeen.png)
+![Rear View](images/First Screeen.png)
 
 3. **Fan Control Page**  
    Shows current fan speed.  
