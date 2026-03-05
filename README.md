@@ -10,6 +10,7 @@ Front:
 ![Alt text](images/Product-Front-View.webp)   
 
 Rear:
+![Alt text](images/Product-Rear-View.webp)   
 
 I've never been able to get the code working for them, until I tackled them this past week. I use Home Assistant and esphome for most of my devices now, so I stay on that platform. In looking at various esphome components, i found the older lgvl driver was working for some folks but i had issues.. I ended up staying with the mipi_spi component.  A lot of the code was home grown but I relied on Copilot and chatgpt some to help pull in some of the mundane details (with, of course, a lot of cleanup, as the LLM's available for free understand a lot of the ESPHome design, but often end up mixing in older Arduino code and breaking things...)
 
