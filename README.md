@@ -37,7 +37,8 @@ The remote is designed for **fast, reliable control** inside a camper without de
 
 ### Planned Pages
 #### First Screen
-![Rear View](images/First Screeen.png)
+![Rear View]("images/First Screeen.png")
+
 1. **Environment Page**  
    Displays interior temperature and humidity.  
    *No controls on this page.*
