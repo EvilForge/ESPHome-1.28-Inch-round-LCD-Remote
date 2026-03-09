@@ -32,7 +32,7 @@ The remote is designed for **fast, reliable control** inside a camper without de
 - Touch‑based controls for fan and lighting  
 - Clear navigation arrows on screen  
 - ESP‑NOW communication (encrypted)  
-- Optional local web server for debugging  
+- Optional local web server for debugging  (not really needed, so it was removed, but its easy to re-add)
 - Optional Home Assistant integration for monitoring  
 
 ### Planned Pages
@@ -50,6 +50,10 @@ The remote is designed for **fast, reliable control** inside a camper without de
 4. **Exterior Lighting Page**  
    Shows current brightness.  
    Up/down touch regions adjust brightness.
+
+4. **Mode Page**  
+   Shows current camper mode.  
+   Up touch region rotates mode.
 
 ---
 
@@ -72,12 +76,13 @@ Some code was generated with the help of Copilot/ChatGPT, but required significa
 
 This version implements:
 
-- One‑way ESP‑NOW updates from the camper’s main controller  
+- Two‑way ESP‑NOW updates from the camper’s main controller (sensor data) and commands back (single INTEGER sensor) 
 - Multi‑page UI with navigation arrows  
 - Touch‑based page switching  
 - Fan and light control logic  
-- Stable display rendering  
-- Optional web server for debugging  
+- Stable display rendering
+- Mode change display
+- Optional web server for debugging  (removed with latest update due to memory)
 
 The remote works independently of Home Assistant or Wi‑Fi, which is essential for RV use where networks may not be available. It provides quick access to lighting and fan controls without needing to unlock a phone or load a web UI.
 
