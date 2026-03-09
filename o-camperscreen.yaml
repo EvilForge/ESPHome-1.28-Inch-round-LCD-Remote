@@ -1,19 +1,29 @@
 esphome:
   name: o-camperscreen
   friendly_name: o-camperscreen
+  on_boot:
+    priority: -10
+    then:
+      - if:
+          condition:
+            not:
+              light.is_on: back_light
+          then:
+            - light.turn_on:
+                id: back_light
+                brightness: 60%
 
 esp32:
   board: esp32-c3-devkitm-1
   framework:
     type: esp-idf
 
-# NOTE - the secrets and such used are all REDACTED as are the MAC addresses, you need to figure these MAC addresses out.
-# If you start the ESPHome devices with a sample MAC like AA:BB:CC:DD:EE:FF , it will at least log the local MAC in the logging so you can find that and update it, then redeploy.
-
-# Enable logging
+# --------------------------------------------------
+# Logging / API / OTA
+# --------------------------------------------------
 logger:
+  level: DEBUG
 
-# Enable Home Assistant API
 api:
   encryption:
     key: "REDACTED"
@@ -22,11 +32,15 @@ ota:
   - platform: esphome
     password: "REDACTED"
 
+# --------------------------------------------------
+# Wi-Fi / Captive Portal
+# --------------------------------------------------
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+  power_save_mode: LIGHT
 
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "O-Camperscreen Fallback Hotspot"
     password: "REDACTED"
@@ -34,28 +48,8 @@ wifi:
 captive_portal:
 
 # --------------------------------------------------
-# Web Server
+# GPIO / Resources / Bus / Variables
 # --------------------------------------------------
-web_server:
-  port: 80
-  version: 3
-  include_internal: True
-  local: true
-  log: True
-  auth:
-    username: camper
-    password: REDACTED
-  sorting_groups:
-    - id: environment
-      name: "Environment"
-      sorting_weight: 10
-    - id: security
-      name: "Security"
-      sorting_weight: 20
-    - id: controls
-      name: "Controls"
-      sorting_weight: 30
-
 i2c:
   sda: GPIO04
   scl: GPIO05
@@ -69,127 +63,141 @@ spi:
 font:
   - file: "gfonts://Roboto"
     id: font_large
-    size: 24
+    size: 27
+
+globals:
+  - id: fan_speed
+    type: int
+    initial_value: '1'
+  - id: light_level
+    type: int
+    initial_value: '50'
+  - id: last_touch_time
+    type: uint32_t
+    initial_value: '0'
+  - id: command_value
+    type: int
+    initial_value: '0'
+
+# -----------------------------------------
+# Outputs / Lights / Switches
+# -----------------------------------------
+light:
+  - platform: monochromatic
+    output: gpio_3_backlight_pwm
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: RESTORE_DEFAULT_ON
 
 output:
   - platform: ledc
     pin: GPIO3
     id: gpio_3_backlight_pwm
 
-light:
-  - platform: monochromatic
-    output: gpio_3_backlight_pwm
-    name: "Display Backlight"
-    id: back_light
-    restore_mode: ALWAYS_ON
-
 # --------------------------------------------------
-# Monitor Comms This unit - monitor - is 98:REDACTED
+# Sensors
 # --------------------------------------------------
-espnow:
-  channel: 1
-  peers:
-    - "78:REDACTED"   # MAC of the camper ESP32
-  on_receive: 
-    then:
-      - logger.log: "Message Recieved"
-
-packet_transport:
-  - platform: espnow
-    providers: 
-      - name: o-camper
-        encryption: "REDACTED"
-
-#--------------------------------------------
-# Variables
-#--------------------------------------------
 text_sensor:
-  - platform: template
-    name: "Status"
-    id: status
-    internal: False
-    web_server:
-      sorting_group_id: environment
-      sorting_weight: 8
   - platform: template
     name: "Mode"
     id: mode
     internal: False
-    web_server:
-      sorting_group_id: environment
-      sorting_weight: 9
 
-# --------------------------------------------------
-# Sensors
-# --------------------------------------------------
 sensor:
   - platform: packet_transport
+    transport_id: ptrans_camper_to_screen
     provider: o-camper
     id: remote_camper_mode
     remote_id: mode_template
     name: "Camper Mode"
     internal: True
-    on_value: 
-      then:
-        - lambda: |- 
-            if (x == 1) {
-              id(mode).state = "Occupied";
-            } else if (x == 2) {
-              id(mode).state = "Secured";
-            } else if (x == 3) {
-              id(mode).state = "Sleeping";
-            } else if (x == 4) {
-              id(mode).state = "Traveling";
-            }
-
   - platform: packet_transport
+    transport_id: ptrans_camper_to_screen
     provider: o-camper
     id: remote_panel_temp
     remote_id: panel_temp
     name: "Panel Temp"
     internal: False
-    web_server:
-      sorting_group_id: environment
-      sorting_weight: 10
   - platform: packet_transport
     provider: o-camper
+    transport_id: ptrans_camper_to_screen
     id: remote_panel_humid
     remote_id: panel_humid
     name: "Panel Humidity"
     internal: False
-    web_server:
-      sorting_group_id: environment
-      sorting_weight: 10
   - platform: packet_transport
     provider: o-camper
+    transport_id: ptrans_camper_to_screen
+    id: remote_fan
+    remote_id: inside_fan_template
+    name: "Inside Fan"
+    internal: False
+  - platform: packet_transport
+    provider: o-camper
+    transport_id: ptrans_camper_to_screen
     id: remote_area_light
     remote_id: area_light_template
     name: "Area Light"
     internal: False
-    web_server:
-      sorting_group_id: controls
-      sorting_weight: 10
+  - platform: packet_transport
+    provider: o-camper
+    transport_id: ptrans_camper_to_screen
+    id: remote_outside_temp
+    remote_id: outside_temp
+    name: "Outside Temp"
+    internal: False
+  - platform: template
+    id: command_int
+    name: "command_int"
+    lambda: 'return id(command_value);'
+    update_interval: 60s
+    internal: True
+
+# --------------------------------------------------
+# Monitor Comms This unit - screen - is DCREDACTED6C
+# --------------------------------------------------
+espnow:
+  channel: 6
+  id: espnow_component
+  peers:
+    - "7REDACTEDC"   # MAC of the camper ESP32
+  on_receive: 
+    then:
+      - lambda: |-
+          char des_mac[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+          char src_mac[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+          ESP_LOGD("espnow", "Recieved from %s to %s. RSSI: %ddBm",
+                  format_mac_addr_upper(info.src_addr, src_mac),
+                  format_mac_addr_upper(info.des_addr, des_mac),
+                  info.rx_ctrl->rssi);
+                  
+packet_transport:
+  - platform: espnow
+    id: ptrans_camper_to_screen
+    providers: 
+      - name: o-camper
+        encryption: "REDACTED"
+  - platform: espnow
+    id: ptrans_screen_to_camper
+    # update_interval: 5s
+    espnow_id: espnow_component
+    peer_address: "78REDACTEDC"
+    encryption: "REDACTED"
+    sensors:
+      - command_int
 
 # -----------------------------
-# GLOBALS FOR UI STATE
+# Scripts
 # -----------------------------
-globals:
-  - id: current_page
-    type: int
-    initial_value: '0'
-
-  - id: fan_speed
-    type: int
-    initial_value: '1'
-
-  - id: light_level
-    type: int
-    initial_value: '50'
-
-  - id: last_touch_time
-    type: uint32_t
-    initial_value: '0'
-
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          const uint32_t now = millis();
+          if ((now - id(last_touch_time) > 15000) && (id(back_light).current_values.is_on())) {
+            ESP_LOGI("interval", "turning display off, millis: %d %d", last_touch_time, now);
+            id(back_light).turn_on().set_brightness(0.0f).perform();
+          }
 
 # -----------------------------
 # DISPLAY + PAGE RENDERING
@@ -219,16 +227,32 @@ display:
           auto white = Color(255, 255, 255);
           auto green = Color(0, 255, 0);
           auto blue = Color(0, 0, 255);
+          auto yellow = Color(200, 200, 0);
 
           it.fill(black);
-          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Inside");
+          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Enviro");
 
           char buf[32];
-          snprintf(buf, sizeof(buf), "Temp: %.1f", id(remote_panel_temp).state);
-          it.print(120, 110, id(font_large), green, TextAlign::CENTER, buf);
+          snprintf(buf, sizeof(buf), "In: %.1f °F", id(remote_panel_temp).state);
+          if (id(remote_panel_temp).state > 75) {
+            it.print(120, 90, id(font_large), yellow, TextAlign::CENTER, buf);
+          } else {
+            it.print(120, 90, id(font_large), green, TextAlign::CENTER, buf);
+          }
 
-          snprintf(buf, sizeof(buf), "Humidity: %.1f", id(remote_panel_humid).state);
-          it.print(120, 160, id(font_large), blue, TextAlign::CENTER, buf);
+          snprintf(buf, sizeof(buf), "%.1f %%", id(remote_panel_humid).state);
+          if (id(remote_panel_humid).state > 70) {
+            it.print(120, 130, id(font_large), blue, TextAlign::CENTER, buf);
+          } else {
+            it.print(120, 130, id(font_large), white, TextAlign::CENTER, buf);
+          }
+
+          snprintf(buf, sizeof(buf), "Out: %.1f °F", id(remote_outside_temp).state);
+          if (id(remote_outside_temp).state > 90) {
+            it.print(120, 170, id(font_large), yellow, TextAlign::CENTER, buf);
+          } else {
+            it.print(120, 170, id(font_large), green, TextAlign::CENTER, buf);
+          }
 
           // Draw left arrow (◀)
           it.line(40, 120, 20, 120, white);   // horizontal
@@ -250,7 +274,7 @@ display:
           it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Fan Speed");
 
           char buf[32];
-          snprintf(buf, sizeof(buf), "Speed: %d", id(fan_speed));
+          snprintf(buf, sizeof(buf), "%d %%", (int) id(remote_fan).state);
           it.print(120, 140, id(font_large), green, TextAlign::CENTER, buf);
           
           // Draw left arrow (◀)
@@ -273,8 +297,56 @@ display:
           it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Exterior Light");
 
           char buf[32];
-          snprintf(buf, sizeof(buf), "Level: %d", id(light_level));
-          it.print(120, 140, id(font_large), blue, TextAlign::CENTER, buf);
+          snprintf(buf, sizeof(buf), "%d %%", (int) id(remote_area_light).state);
+          it.print(120, 140, id(font_large), white, TextAlign::CENTER, buf);
+          
+          // Draw left arrow (◀)
+          it.line(40, 120, 20, 120, white);   // horizontal
+          it.line(30, 110, 20, 120, white);   // upper diagonal
+          it.line(30, 130, 20, 120, white);   // lower diagonal
+
+          // Draw right arrow (▶)
+          it.line(200, 120, 220, 120, white); // horizontal
+          it.line(210, 110, 220, 120, white); // upper diagonal
+          it.line(210, 130, 220, 120, white); // lower diagonal
+
+      - id: page_mode
+        lambda: |-
+          auto black = Color(0, 0, 0);
+          auto red = Color(255, 0, 0);
+          auto green = Color(0, 255, 0);
+          auto blue = Color(0, 0, 255);
+          auto white = Color(255, 255, 255);
+          auto yellow = Color(128, 128, 0);
+
+          it.fill(black);
+          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Camper Mode");
+
+          // Handle no data yet
+          if (isnan(id(remote_camper_mode).state)) {
+            it.print(120, 140, id(font_large), white, TextAlign::CENTER, "Waiting...");
+            return;
+          }
+
+          int mode_val = (int)id(remote_camper_mode).state;
+
+          switch (mode_val) {
+            case 1:
+              it.print(120, 120, id(font_large), green, TextAlign::CENTER, "Occupied");
+              break;
+            case 2:
+              it.print(120, 120, id(font_large), red, TextAlign::CENTER, "Secured");
+              break;
+            case 3:
+              it.print(120, 120, id(font_large), green, TextAlign::CENTER, "Sleeping");
+              break;
+            case 4:
+              it.print(120, 120, id(font_large), white, TextAlign::CENTER, "Traveling");
+              break;
+            default:
+              it.print(120, 120, id(font_large), yellow, TextAlign::CENTER, "Unknown");
+              break;
+          }
           
           // Draw left arrow (◀)
           it.line(40, 120, 20, 120, white);   // horizontal
@@ -311,16 +383,17 @@ touchscreen:
           uint32_t now = millis();
           if (now - id(last_touch_time) < 300) return;
           id(last_touch_time) = now;
+          id(back_light).turn_on().set_brightness(0.9f).perform();
 
           // LEFT REGION → previous page
-          if (x > 1 && x < 120 && y > 100 && y < 140) {
+          if (x > 1 && x < 150 && y > 100 && y < 140) {
             id(round_display).show_prev_page();
             ESP_LOGI("touch", "Left");
             return;
           }
 
           // RIGHT REGION → next page
-          if (x > 210 && x < 240 && y > 100 && y < 140) {
+          if (x > 180 && x < 240 && y > 100 && y < 140) {
             id(round_display).show_next_page();
             ESP_LOGI("touch", "Right");
             return;
@@ -329,24 +402,40 @@ touchscreen:
           // UP/DOWN for fan/light pages
           if (id(round_display).get_active_page() == id(page_fan)) {
             if (y < 65) {
-              id(fan_speed) = std::min(5, id(fan_speed) + 1);
               ESP_LOGI("touch", "Fan Up");
+              id(command_value) = 1;  // your command ID for fan speed up
+              id(command_int).publish_state(1);  // force send
             } else if (y > 170) {
-              id(fan_speed) = std::max(0, id(fan_speed) - 1);
               ESP_LOGI("touch", "Fan Down");
+              id(command_value) = 2;  // your command ID for fan speed Down
+              id(command_int).publish_state(2);  // force send
             }
           }
 
           if (id(round_display).get_active_page() == id(page_light)) {
             if (y < 65) {
-              id(light_level) = std::min(100, id(light_level) + 5);
               ESP_LOGI("touch", "Light Up");
+              id(command_value) = 3;  // your command ID for light up
+              id(command_int).publish_state(3);  // force send
             } else if (y > 170) {
-              id(light_level) = std::max(0, id(light_level) - 5);
               ESP_LOGI("touch", "Light Down");
+              id(command_value) = 4;  // your command ID for light down
+              id(command_int).publish_state(4);  // force send
+            }
+          }
+
+          if (id(round_display).get_active_page() == id(page_mode)) {
+            if (y < 65) {
+              ESP_LOGI("touch", "Mode Up");
+              id(command_value) = 5;  // your command ID for mode UP
+              id(command_int).publish_state(5);  // force send
             }
           }
 
   on_release:
     then:
       - logger.log: "Dev released."
+      - lambda: |-
+          // SEND the fan command using packet_transport, to_camper, value 0 (no command)
+          id(command_value) = 0;  // your command ID for fan speed
+          id(command_int).publish_state(0);  // force send
