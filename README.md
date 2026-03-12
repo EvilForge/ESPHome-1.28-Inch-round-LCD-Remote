@@ -46,15 +46,21 @@ The remote is designed for **fast, reliable control** inside a camper without de
 3. **Fan Control Page**  
    Shows current fan speed.  
    Up/down touch regions adjust speed.
+   Center tap toggles on/off
 
-4. **Exterior Lighting Page**  
+5. **Exterior Lighting Page**  
    Shows current brightness.  
    Up/down touch regions adjust brightness.
+   Center tap toggles on/off
 
 4. **Mode Page**  
    Shows current camper mode.  
-   Up touch region rotates mode.
+   Center tap rotates mode.
 
+5. **Opening/Security Page**
+   Show if doors or windows are open.
+   If the mode is secured, or traveling, it may be a good idea to switch to this page and turn on the backlight as an alert. (not implemented yet)
+   
 ---
 
 ## Background and Development Notes
@@ -86,6 +92,7 @@ This version implements:
 
 The remote works independently of Home Assistant or Wi‑Fi, which is essential for RV use where networks may not be available. It provides quick access to lighting and fan controls without needing to unlock a phone or load a web UI.
 
+NOTE - I found that my version of the hardware DOES have an internal antenna glued to the rear of the case. However.. we still struggle with short range. The debug dump of mac and RSSI on the espnow on_receive event helps show you how bad the reception is.. and when the ESPNow link is too weak, the system can really act weird.
 ---
 
 ## Related Projects
