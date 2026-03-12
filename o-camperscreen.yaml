@@ -66,12 +66,6 @@ font:
     size: 27
 
 globals:
-  - id: fan_speed
-    type: int
-    initial_value: '1'
-  - id: light_level
-    type: int
-    initial_value: '50'
   - id: last_touch_time
     type: uint32_t
     initial_value: '0'
@@ -112,6 +106,13 @@ sensor:
     name: "Camper Mode"
     internal: True
   - platform: packet_transport
+    provider: o-camper
+    transport_id: ptrans_camper_to_screen
+    id: remote_outside_temp
+    remote_id: outside_temp
+    name: "Outside Temp"
+    internal: False
+  - platform: packet_transport
     transport_id: ptrans_camper_to_screen
     provider: o-camper
     id: remote_panel_temp
@@ -129,22 +130,29 @@ sensor:
     provider: o-camper
     transport_id: ptrans_camper_to_screen
     id: remote_fan
-    remote_id: inside_fan_template
-    name: "Inside Fan"
+    remote_id: fan_template
+    name: "Fan"
     internal: False
   - platform: packet_transport
     provider: o-camper
     transport_id: ptrans_camper_to_screen
-    id: remote_area_light
-    remote_id: area_light_template
-    name: "Area Light"
+    id: fan_level
+    remote_id: fan_level_template
+    name: "Fan Level"
     internal: False
   - platform: packet_transport
     provider: o-camper
     transport_id: ptrans_camper_to_screen
-    id: remote_outside_temp
-    remote_id: outside_temp
-    name: "Outside Temp"
+    id: remote_light_level
+    remote_id: light_level_template
+    name: "Light Level"
+    internal: False
+  - platform: packet_transport
+    provider: o-camper
+    transport_id: ptrans_camper_to_screen
+    id: remote_light
+    remote_id: remote_light_template
+    name: "Light"
     internal: False
   - platform: template
     id: command_int
@@ -154,13 +162,14 @@ sensor:
     internal: True
 
 # --------------------------------------------------
-# Monitor Comms This unit - screen - is DCREDACTED6C
+# Monitor Comms This unit - screen - is REDACTED
+# o-camper2 is REDACTED
 # --------------------------------------------------
 espnow:
   channel: 6
   id: espnow_component
   peers:
-    - "7REDACTEDC"   # MAC of the camper ESP32
+    - "REDACTED"   # MAC of the o-camper ESP32
   on_receive: 
     then:
       - lambda: |-
@@ -170,7 +179,7 @@ espnow:
                   format_mac_addr_upper(info.src_addr, src_mac),
                   format_mac_addr_upper(info.des_addr, des_mac),
                   info.rx_ctrl->rssi);
-                  
+                      
 packet_transport:
   - platform: espnow
     id: ptrans_camper_to_screen
@@ -181,7 +190,7 @@ packet_transport:
     id: ptrans_screen_to_camper
     # update_interval: 5s
     espnow_id: espnow_component
-    peer_address: "78REDACTEDC"
+    peer_address: "REDACTED"
     encryption: "REDACTED"
     sensors:
       - command_int
@@ -194,14 +203,52 @@ interval:
     then:
       - lambda: |-
           const uint32_t now = millis();
-          if ((now - id(last_touch_time) > 15000) && (id(back_light).current_values.is_on())) {
+          if ((now - id(last_touch_time) > 30000) && (id(back_light).current_values.is_on())) {
             ESP_LOGI("interval", "turning display off, millis: %d %d", last_touch_time, now);
             id(back_light).turn_on().set_brightness(0.0f).perform();
           }
 
-# -----------------------------
-# DISPLAY + PAGE RENDERING
-# -----------------------------
+# ---------------------------------------------
+# DISPLAY + PAGE RENDERING. Boxes:
+#               80,1   160,1
+#               80,65  160,65
+#
+# 1,80  60,80   80,80  160,80   180,80  240,80
+# 1,160 60,160  80,160 160,160  180,160 240,160
+#
+#               80,170 160,170
+#               80,240 160,240
+# ----------------------------------------------
+color:
+  - id: black
+    red: 0%
+    green: 0%
+    blue: 0%
+  - id: white
+    red: 100%
+    green: 100%
+    blue: 100%
+  - id: green
+    red: 0%
+    green: 100%
+    blue: 0%
+  - id: blue
+    red: 0%
+    green: 0%
+    blue: 100%
+  - id: yellow
+    red: 80%
+    green: 80%
+    blue: 0
+  - id: gray
+    red: 30%
+    green: 30%
+    blue: 30%
+  - id: red
+    red: 100%
+    green: 0%
+    blue: 0%
+
 display:
   - platform: mipi_spi
     model: GC9A01A
@@ -223,108 +270,120 @@ display:
     pages:
       - id: page_home
         lambda: |-
-          auto black = Color(0, 0, 0);
-          auto white = Color(255, 255, 255);
-          auto green = Color(0, 255, 0);
-          auto blue = Color(0, 0, 255);
-          auto yellow = Color(200, 200, 0);
-
-          it.fill(black);
-          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Enviro");
+          it.fill(id(black));
+          it.print(120, 40, id(font_large), id(white), TextAlign::CENTER, "Enviro");
 
           char buf[32];
           snprintf(buf, sizeof(buf), "In: %.1f °F", id(remote_panel_temp).state);
           if (id(remote_panel_temp).state > 75) {
-            it.print(120, 90, id(font_large), yellow, TextAlign::CENTER, buf);
+            it.print(120, 90, id(font_large), id(yellow), TextAlign::CENTER, buf);
           } else {
-            it.print(120, 90, id(font_large), green, TextAlign::CENTER, buf);
+            it.print(120, 90, id(font_large), id(green), TextAlign::CENTER, buf);
           }
 
           snprintf(buf, sizeof(buf), "%.1f %%", id(remote_panel_humid).state);
           if (id(remote_panel_humid).state > 70) {
-            it.print(120, 130, id(font_large), blue, TextAlign::CENTER, buf);
+            it.print(120, 130, id(font_large), id(blue), TextAlign::CENTER, buf);
           } else {
-            it.print(120, 130, id(font_large), white, TextAlign::CENTER, buf);
+            it.print(120, 130, id(font_large), id(white), TextAlign::CENTER, buf);
           }
 
           snprintf(buf, sizeof(buf), "Out: %.1f °F", id(remote_outside_temp).state);
           if (id(remote_outside_temp).state > 90) {
-            it.print(120, 170, id(font_large), yellow, TextAlign::CENTER, buf);
+            it.print(120, 170, id(font_large), id(yellow), TextAlign::CENTER, buf);
           } else {
-            it.print(120, 170, id(font_large), green, TextAlign::CENTER, buf);
+            it.print(120, 170, id(font_large), id(green), TextAlign::CENTER, buf);
           }
 
           // Draw left arrow (◀)
-          it.line(40, 120, 20, 120, white);   // horizontal
-          it.line(30, 110, 20, 120, white);   // upper diagonal
-          it.line(30, 130, 20, 120, white);   // lower diagonal
-
+          it.line(40, 120, 20, 120, id(white));   // horizontal
+          it.line(30, 110, 20, 120, id(white));   // upper diagonal
+          it.line(30, 130, 20, 120, id(white));   // lower diagonal
           // Draw right arrow (▶)
-          it.line(200, 120, 220, 120, white); // horizontal
-          it.line(210, 110, 220, 120, white); // upper diagonal
-          it.line(210, 130, 220, 120, white); // lower diagonal
+          it.line(200, 120, 220, 120, id(white)); // horizontal
+          it.line(210, 110, 220, 120, id(white)); // upper diagonal
+          it.line(210, 130, 220, 120, id(white)); // lower diagonal
+
+          // commented out, but draws touch screen boxes for debug.
+          // it.line(1, 80, 60, 80, id(gray)); // left region
+          // it.line(1, 160, 60, 160, id(gray)); // left region
+          // it.line(60, 80, 60, 160, id(gray)); // left region
+          // it.line(180, 80, 240, 80, id(gray)); // right region
+          // it.line(180, 160, 240, 160, id(gray)); // right region
+          // it.line(180, 80, 180, 160, id(gray)); // right 
+          // it.line(80, 65, 160, 65, id(gray)); // up
+          // it.line(80, 1, 80, 65, id(gray)); // up
+          // it.line(160, 1, 160, 65, id(gray)); // up
+          // it.line(80, 170, 160, 170, id(gray)); // down
+          // it.line(80, 170, 80, 240, id(gray)); // down
+          // it.line(160, 170, 160, 240, id(gray)); // down
+          // it.line(80, 80, 160, 80, id(gray)); // center
+          // it.line(80, 80, 80, 160, id(gray)); // center
+          // it.line(80, 160, 160, 160, id(gray)); // center
+          // it.line(160, 80, 160, 160, id(gray)); // center
 
       - id: page_fan
         lambda: |-
-          auto black = Color(0, 0, 0);
-          auto white = Color(255, 255, 255);
-          auto green = Color(0, 255, 0);
-
           it.fill(black);
-          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Fan Speed");
+          it.print(120, 100, id(font_large), id(white), TextAlign::CENTER, "Fan");
 
           char buf[32];
-          snprintf(buf, sizeof(buf), "%d %%", (int) id(remote_fan).state);
-          it.print(120, 140, id(font_large), green, TextAlign::CENTER, buf);
+          snprintf(buf, sizeof(buf), "%d %%", (int) id(fan_level).state);
+          if ( (int) id(remote_fan).state > 0) {
+            it.print(120, 140, id(font_large), id(green), TextAlign::CENTER, buf);
+          } else {
+            it.print(120, 140, id(font_large), id(red), TextAlign::CENTER, buf);
+          }
           
           // Draw left arrow (◀)
-          it.line(40, 120, 20, 120, white);   // horizontal
-          it.line(30, 110, 20, 120, white);   // upper diagonal
-          it.line(30, 130, 20, 120, white);   // lower diagonal
-
+          it.line(40, 120, 20, 120, id(white));   // horizontal
+          it.line(30, 110, 20, 120, id(white));   // upper diagonal
+          it.line(30, 130, 20, 120, id(white));   // lower diagonal
           // Draw right arrow (▶)
-          it.line(200, 120, 220, 120, white); // horizontal
-          it.line(210, 110, 220, 120, white); // upper diagonal
-          it.line(210, 130, 220, 120, white); // lower diagonal
+          it.line(200, 120, 220, 120, id(white)); // horizontal
+          it.line(210, 110, 220, 120, id(white)); // upper diagonal
+          it.line(210, 130, 220, 120, id(white)); // lower diagonal
+          // Draw top Plus (+)
+          it.line(120, 20, 120, 40, id(white)); // vertical
+          it.line(110, 30, 130, 30, id(white)); // horizontal
+          // Draw bottom minus (-)
+          it.line(110, 210, 130, 210, id(white)); // horizontal
 
       - id: page_light
         lambda: |-
-          auto black = Color(0, 0, 0);
-          auto white = Color(255, 255, 255);
-          auto blue = Color(0, 0, 255);
-
           it.fill(black);
-          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Exterior Light");
+          it.print(120, 100, id(font_large), id(white), TextAlign::CENTER, "Light");
 
           char buf[32];
-          snprintf(buf, sizeof(buf), "%d %%", (int) id(remote_area_light).state);
-          it.print(120, 140, id(font_large), white, TextAlign::CENTER, buf);
+          snprintf(buf, sizeof(buf), "%d %%", (int) id(remote_light_level).state);
+          if ( (int) id(remote_light).state > 0) {
+            it.print(120, 140, id(font_large), id(green), TextAlign::CENTER, buf);
+          } else {
+            it.print(120, 140, id(font_large), id(red), TextAlign::CENTER, buf);
+          }
           
           // Draw left arrow (◀)
-          it.line(40, 120, 20, 120, white);   // horizontal
-          it.line(30, 110, 20, 120, white);   // upper diagonal
-          it.line(30, 130, 20, 120, white);   // lower diagonal
-
+          it.line(40, 120, 20, 120, id(white));   // horizontal
+          it.line(30, 110, 20, 120, id(white));   // upper diagonal
+          it.line(30, 130, 20, 120, id(white));   // lower diagonal
           // Draw right arrow (▶)
-          it.line(200, 120, 220, 120, white); // horizontal
-          it.line(210, 110, 220, 120, white); // upper diagonal
-          it.line(210, 130, 220, 120, white); // lower diagonal
+          it.line(200, 120, 220, 120, id(white)); // horizontal
+          it.line(210, 110, 220, 120, id(white)); // upper diagonal
+          it.line(210, 130, 220, 120, id(white)); // lower diagonal
+          // Draw top Plus (+)
+          it.line(120, 20, 120, 40, id(white)); // vertical
+          it.line(110, 30, 130, 30, id(white)); // horizontal
+          // Draw bottom minus (-)
+          it.line(110, 210, 130, 210, id(white)); // horizontal
 
       - id: page_mode
         lambda: |-
-          auto black = Color(0, 0, 0);
-          auto red = Color(255, 0, 0);
-          auto green = Color(0, 255, 0);
-          auto blue = Color(0, 0, 255);
-          auto white = Color(255, 255, 255);
-          auto yellow = Color(128, 128, 0);
-
           it.fill(black);
-          it.print(120, 40, id(font_large), white, TextAlign::CENTER, "Camper Mode");
+          it.print(120, 40, id(font_large), id(white), TextAlign::CENTER, "Mode");
 
           // Handle no data yet
           if (isnan(id(remote_camper_mode).state)) {
-            it.print(120, 140, id(font_large), white, TextAlign::CENTER, "Waiting...");
+            it.print(120, 140, id(font_large), id(white), TextAlign::CENTER, "Waiting...");
             return;
           }
 
@@ -332,31 +391,30 @@ display:
 
           switch (mode_val) {
             case 1:
-              it.print(120, 120, id(font_large), green, TextAlign::CENTER, "Occupied");
+              it.print(120, 120, id(font_large), id(green), TextAlign::CENTER, "Occupied");
               break;
             case 2:
-              it.print(120, 120, id(font_large), red, TextAlign::CENTER, "Secured");
+              it.print(120, 120, id(font_large), id(red), TextAlign::CENTER, "Secured");
               break;
             case 3:
-              it.print(120, 120, id(font_large), green, TextAlign::CENTER, "Sleeping");
+              it.print(120, 120, id(font_large), id(green), TextAlign::CENTER, "Sleeping");
               break;
             case 4:
-              it.print(120, 120, id(font_large), white, TextAlign::CENTER, "Traveling");
+              it.print(120, 120, id(font_large), id(white), TextAlign::CENTER, "Traveling");
               break;
             default:
-              it.print(120, 120, id(font_large), yellow, TextAlign::CENTER, "Unknown");
+              it.print(120, 120, id(font_large), id(yellow), TextAlign::CENTER, "Unknown");
               break;
           }
           
           // Draw left arrow (◀)
-          it.line(40, 120, 20, 120, white);   // horizontal
-          it.line(30, 110, 20, 120, white);   // upper diagonal
-          it.line(30, 130, 20, 120, white);   // lower diagonal
-
+          it.line(40, 120, 20, 120, id(white));   // horizontal
+          it.line(30, 110, 20, 120, id(white));   // upper diagonal
+          it.line(30, 130, 20, 120, id(white));   // lower diagonal
           // Draw right arrow (▶)
-          it.line(200, 120, 220, 120, white); // horizontal
-          it.line(210, 110, 220, 120, white); // upper diagonal
-          it.line(210, 130, 220, 120, white); // lower diagonal
+          it.line(200, 120, 220, 120, id(white)); // horizontal
+          it.line(210, 110, 220, 120, id(white)); // upper diagonal
+          it.line(210, 130, 220, 120, id(white)); // lower diagonal
 
 # -----------------------------
 # TOUCHSCREEN
@@ -385,15 +443,13 @@ touchscreen:
           id(last_touch_time) = now;
           id(back_light).turn_on().set_brightness(0.9f).perform();
 
-          // LEFT REGION → previous page
-          if (x > 1 && x < 150 && y > 100 && y < 140) {
+          // LEFT <- previous, RIGHT -> next
+          if (x < 60 && y > 100 && y < 140) {
             id(round_display).show_prev_page();
             ESP_LOGI("touch", "Left");
             return;
           }
-
-          // RIGHT REGION → next page
-          if (x > 180 && x < 240 && y > 100 && y < 140) {
+          if (x > 180 && y > 100 && y < 140) {
             id(round_display).show_next_page();
             ESP_LOGI("touch", "Right");
             return;
@@ -401,41 +457,53 @@ touchscreen:
 
           // UP/DOWN for fan/light pages
           if (id(round_display).get_active_page() == id(page_fan)) {
-            if (y < 65) {
+            if (x > 80 && x < 160 && y < 65) {
               ESP_LOGI("touch", "Fan Up");
-              id(command_value) = 1;  // your command ID for fan speed up
+              id(command_value) = 1;
               id(command_int).publish_state(1);  // force send
-            } else if (y > 170) {
+            } else if (x > 80 && x < 160 && y > 170) {
               ESP_LOGI("touch", "Fan Down");
               id(command_value) = 2;  // your command ID for fan speed Down
               id(command_int).publish_state(2);  // force send
+            } else if (x > 80 && x < 160 && y > 80 && y < 160) {
+              ESP_LOGI("touch", "Fan Toggle");
+              id(command_value) = 3;  // your command ID for fan toggle
+              id(command_int).publish_state(3);  // force send
             }
+            return;
           }
 
           if (id(round_display).get_active_page() == id(page_light)) {
-            if (y < 65) {
+            if (x > 80 && x < 160 && y < 65)  {
               ESP_LOGI("touch", "Light Up");
-              id(command_value) = 3;  // your command ID for light up
-              id(command_int).publish_state(3);  // force send
-            } else if (y > 170) {
-              ESP_LOGI("touch", "Light Down");
-              id(command_value) = 4;  // your command ID for light down
+              id(command_value) = 4;  // your command ID for light up
               id(command_int).publish_state(4);  // force send
+            } else if (x > 80 && x < 160 && y > 170) {
+              ESP_LOGI("touch", "Light Down");
+              id(command_value) = 5;  // your command ID for light down
+              id(command_int).publish_state(5);  // force send
             }
+            if (x > 80 && x < 160 && y > 80 && y < 160) {
+              ESP_LOGI("touch", "Light Toggle");
+              id(command_value) = 6;  // your command ID for light toggle
+              id(command_int).publish_state(6);  // force send
+            }
+            return;
           }
 
           if (id(round_display).get_active_page() == id(page_mode)) {
-            if (y < 65) {
+            if (x > 80 && x < 160 && y > 80 && y < 160) {
               ESP_LOGI("touch", "Mode Up");
-              id(command_value) = 5;  // your command ID for mode UP
-              id(command_int).publish_state(5);  // force send
+              id(command_value) = 7;  // your command ID for mode UP
+              id(command_int).publish_state(7);  // force send
             }
+            return;
           }
 
   on_release:
     then:
-      - logger.log: "Dev released."
+      - logger.log: "Touch released."
       - lambda: |-
           // SEND the fan command using packet_transport, to_camper, value 0 (no command)
-          id(command_value) = 0;  // your command ID for fan speed
+          id(command_value) = 0;  // your command ID for 'nothing'
           id(command_int).publish_state(0);  // force send
